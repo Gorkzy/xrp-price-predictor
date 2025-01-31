@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Predikce ceny XRP</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            text-align: center;
+            padding: 50px;
+        }
+
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            display: inline-block;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        #result {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Predikce ceny XRP</h1>
+        <form id="predictForm">
+            <input type="hidden" id="api-key" name="api_key" value="">
+            <button type="submit">Predikovat</button>
+        </form>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        // Získání API klíče (můžeš upravit podle svého)
+        const apiKey = "maxim-pidaras6944"; // Nahraď tímto řádkem získávání API klíče z jiného zdroje
+
+        // Nastavení hodnoty API klíče do skrytého inputu
+        document.getElementById('api-key').value = apiKey;
+
+        // Odeslání požadavku a zpracování odpovědi
+        const form = document.getElementById('predictForm');
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+
+            fetch('/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ api_key: apiKey })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log(data); // Zkontroluj, zda jsou data.current_price a data.predicted_price správná
+                document.getElementById('result').innerHTML = `
+                    <p>Aktuální cena XRP: <strong>${data.current_price}</strong></p>
+                    <p>Předpokládaná cena: <strong>${data.predicted_price}</strong></p>
+                `;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('result').textContent = `Chyba: ${error.error || error.message}`;
+            });
+        });
+    </script>
+</body>
+</html>
