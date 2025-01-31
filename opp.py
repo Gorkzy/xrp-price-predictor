@@ -4,26 +4,19 @@ import os
 from tensorflow.keras.models import load_model  # type: ignore
 import logging
 import requests  # Import knihovny pro HTTP požadavky
+from dotenv import load_dotenv
+
+# Načti proměnné z .env souboru (pro lokální testování)
+load_dotenv()
 
 # Nastavení logování
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Platné API klíče
-VALID_API_KEYS = {
-    "maxim-pidaras6944",
-    "tom-mimon22",
-    "premium1-e5d1b9a4f7c6e3f",
-    "misa-auditt22",
-    "user4-9c6a4f7e2d1b5e8c",
-    "user1-8e3b5c6d9f1a4b7e",
-    "user2-4f9e6a7d8c2b1e3f",
-    "user3-5d8c1a4b7f9e2e6d",
-    "admin-a1b2c3d4e5f6g7h8",
-    "vip1-2e4d6f8a1b9c7e3f",
-    "test1-3e7c9a2d4f1b5e8f",
-    "guest1-6f1a9e3b7c2d5e4f",
-    "demo1-8c4f7e9a1b5d2e6f"
-}
+# Načtení API klíčů z environment variables
+VALID_API_KEYS = set(os.getenv('VALID_API_KEYS', '').split(','))
+
+# Debugging: Log počet načtených API klíčů (bez jejich obsahu)
+logging.info(f"Number of API keys loaded: {len(VALID_API_KEYS)}")
 
 # Funkce pro získání aktuální ceny XRP z Binance API
 def get_current_xrp_price():
@@ -74,7 +67,6 @@ def predict():
 
     Očekává POST požadavek s API klíčem v těle požadavku ve formátu JSON.
     """
-
     # Získání API klíče z požadavku
     data = request.get_json()
     if not data:
@@ -84,6 +76,7 @@ def predict():
 
     # Ověření platnosti API klíče
     if api_key not in VALID_API_KEYS:
+        logging.warning(f"Invalid API key: {api_key}")
         return jsonify({'error': 'Invalid API key'}), 401
 
     # Získání aktuální ceny XRP
@@ -100,6 +93,7 @@ def predict():
     predicted_price = float(prediction[0][0])
 
     # Návrat výsledku jako JSON
+    logging.info(f"Prediction successful: current_price={current_price}, predicted_price={predicted_price}")
     return jsonify({'current_price': current_price, 'predicted_price': predicted_price})
 
 # Definování cesty k šabloně
