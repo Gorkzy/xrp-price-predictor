@@ -1,1 +1,1 @@
-web: gunicorn opp:app --bind 0.0.0.0:$PORT
+web: gunicorn opp:app --bind 0.0.0.0:5000
