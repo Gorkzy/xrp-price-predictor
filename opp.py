@@ -29,9 +29,17 @@ def get_current_xrp_price():
         url = "https://api.binance.com/api/v3/ticker/price?symbol=XRPUSDT"
         response = requests.get(url)
         data = response.json()
-        current_price = float(data['price'])
-        logging.info(f"Current XRP price fetched: {current_price}")
-        return current_price
+
+        logging.debug(f"Binance API response: {data}")  # Debug log
+
+        if "price" in data:
+            current_price = float(data["price"])
+            logging.info(f"Current XRP price fetched: {current_price}")
+            return current_price
+        else:
+            logging.error(f"API response does not contain 'price' key! Response: {data}")
+            return None
+
     except requests.exceptions.RequestException as e:
         logging.error(f"Error fetching XRP price: {e}")
         return None
@@ -85,16 +93,21 @@ def predict():
     if current_price is None:
         return jsonify({'error': 'Could not fetch current XRP price'}), 500
 
-    # Vytvoření vstupu pro model (použijeme stejnou hodnotu pro 'open' a 'close')
-    X = np.array([[current_price, current_price]])
+    try:
+        # Vytvoření vstupu pro model (použijeme stejnou hodnotu pro 'open' a 'close')
+        X = np.array([[current_price, current_price]])
 
-    # Predikce
-    prediction = model.predict(X)
-    predicted_price = float(prediction[0][0])
+        # Predikce
+        prediction = model.predict(X)
+        predicted_price = float(prediction[0][0])
 
-    # Návrat výsledku jako JSON
-    logging.info(f"Prediction successful: current_price={current_price}, predicted_price={predicted_price}")
-    return jsonify({'current_price': current_price, 'predicted_price': predicted_price})
+        # Návrat výsledku jako JSON
+        logging.info(f"Prediction successful: current_price={current_price}, predicted_price={predicted_price}")
+        return jsonify({'current_price': current_price, 'predicted_price': predicted_price})
+    
+    except Exception as e:
+        logging.error(f"Prediction error: {e}")
+        return jsonify({'error': 'Prediction failed'}), 500
 
 # Definování cesty k šabloně
 @app.route('/')
