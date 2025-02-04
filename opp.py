@@ -20,27 +20,26 @@ logging.info(f"Number of API keys loaded: {len(VALID_API_KEYS)}")
 
 # Funkce pro získání aktuální ceny XRP z Binance API
 def get_current_xrp_price():
+    """Fetches the current XRP price from the Binance API.
+
+    Returns:
+        float: The current XRP price, or None if an error occurs.
+    """
     try:
-        url = "https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=usd"
+        url = "https://api.binance.com/api/v3/ticker/price?symbol=XRPUSDT"
         response = requests.get(url)
         data = response.json()
-
-        # Ověření, zda data obsahují cenu
-        if 'ripple' in data and 'usd' in data['ripple']:
-            current_price = float(data['ripple']['usd'])
-            logging.info(f"Current XRP price fetched: {current_price}")
-            return current_price
-        else:
-            logging.error(f"Invalid response format from CoinGecko: {data}")
-            return None
+        current_price = float(data['price'])
+        logging.info(f"Current XRP price fetched: {current_price}")
+        return current_price
     except requests.exceptions.RequestException as e:
-        logging.error(f"Error fetching XRP price from CoinGecko: {e}")
+        logging.error(f"Error fetching XRP price: {e}")
         return None
     except ValueError as e:
-        logging.error(f"Invalid data format from CoinGecko: {e}")
+        logging.error(f"Invalid data format: {e}")
         return None
-    except Exception as e:
-        logging.error(f"Unexpected error from CoinGecko: {e}")
+    except Exception as e:  # Zachytí všechny ostatní výjimky
+        logging.error(f"Unexpected error: {e}")
         return None
 
 # Nastavení cesty a načtení modelu
@@ -64,48 +63,38 @@ app = Flask(__name__)
 # Endpoint pro automatickou predikci
 @app.route('/predict', methods=['POST'])
 def predict():
-    logging.info("🔹 Přijat požadavek na predikci")
+    """Endpoint pro zpracování požadavku na predikci.
 
-    # Získání JSON dat
-    try:
-        data = request.get_json()
-        logging.info(f"📩 Přijatá data: {data}")
-    except Exception as e:
-        logging.error(f"⛔ Chyba při čtení JSON: {e}")
-        return jsonify({'error': 'Invalid JSON'}), 400
-
+    Očekává POST požadavek s API klíčem v těle požadavku ve formátu JSON.
+    """
+    # Získání API klíče z požadavku
+    data = request.get_json()
     if not data:
-        logging.error("⛔ Chybí JSON v požadavku")
         return jsonify({'error': 'Missing JSON in request'}), 400
 
     api_key = data.get('api_key')
-    logging.info(f"🔑 Přijatý API klíč: {api_key}")
 
-    # Ověření API klíče
+    # Ověření platnosti API klíče
     if api_key not in VALID_API_KEYS:
-        logging.warning("⚠️ Neplatný API klíč!")
+        logging.warning(f"Invalid API key: {api_key}")
         return jsonify({'error': 'Invalid API key'}), 401
 
-    # Získání ceny XRP
+    # Získání aktuální ceny XRP
     current_price = get_current_xrp_price()
-    logging.info(f"💰 Aktuální cena XRP: {current_price}")
 
     if current_price is None:
-        logging.error("⛔ Nepodařilo se získat cenu XRP!")
         return jsonify({'error': 'Could not fetch current XRP price'}), 500
 
-    # Příprava vstupu pro model
-    try:
-        X = np.array([[current_price, current_price]])
-        prediction = model.predict(X)
-        predicted_price = float(prediction[0][0])
+    # Vytvoření vstupu pro model (použijeme stejnou hodnotu pro 'open' a 'close')
+    X = np.array([[current_price, current_price]])
 
-        logging.info(f"✅ Úspěšná predikce: {predicted_price}")
-        return jsonify({'current_price': current_price, 'predicted_price': predicted_price})
+    # Predikce
+    prediction = model.predict(X)
+    predicted_price = float(prediction[0][0])
 
-    except Exception as e:
-        logging.error(f"⛔ Chyba při predikci: {e}")
-        return jsonify({'error': 'Prediction failed'}), 500
+    # Návrat výsledku jako JSON
+    logging.info(f"Prediction successful: current_price={current_price}, predicted_price={predicted_price}")
+    return jsonify({'current_price': current_price, 'predicted_price': predicted_price})
 
 # Definování cesty k šabloně
 @app.route('/')
