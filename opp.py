@@ -3,7 +3,7 @@ import numpy as np
 import os
 from tensorflow.keras.models import load_model  # type: ignore
 import logging
-import requests  # Import knihovny pro HTTP požadavky
+import requests
 from dotenv import load_dotenv
 
 # Načti proměnné z .env souboru (pro lokální testování)
@@ -15,42 +15,36 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Načtení API klíčů z environment variables
 VALID_API_KEYS = set(os.getenv('VALID_API_KEYS', '').split(','))
 
-# Debugging: Log počet načtených API klíčů (bez jejich obsahu)
-logging.info(f"Number of API keys loaded: {len(VALID_API_KEYS)}")
+# Debugging: Log počet načtených API klíčů
+logging.info(f"🔑 Number of API keys loaded: {len(VALID_API_KEYS)}")
 
 # Funkce pro získání aktuální ceny XRP z Binance API
 def get_current_xrp_price():
-    """Fetches the current XRP price from the Binance API.
-
-    Returns:
-        float: The current XRP price, or None if an error occurs.
-    """
+    """Získá aktuální cenu XRP z Binance API."""
     binance_url = "https://api.binance.com/api/v3/ticker/price?symbol=XRPUSDT"
-    
+
     try:
         response = requests.get(binance_url, timeout=5)
-        response.raise_for_status()  # Vyvolá výjimku pro HTTP chyby (např. 404, 500)
+        response.raise_for_status()
         data = response.json()
-
-        # Kontrola, zda odpověď obsahuje klíč 'price'
-        if "price" not in data:
-            logging.error(f"Unexpected Binance API response: {data}")
-            return None
-
-        current_price = float(data["price"])
-        logging.info(f"💰 Aktuální cena XRP: {current_price}")
+        current_price = float(data['price'])
+        logging.info(f"✅ XRP cena z Binance: {current_price}")
         return current_price
-
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"❌ HTTP chyba Binance API: {e.response.status_code} {e.response.reason}")
     except requests.exceptions.RequestException as e:
-        logging.error(f"❌ Chyba při získávání dat z Binance API: {e}")
-        return None
-    except ValueError as e:
-        logging.error(f"❌ Neplatný formát dat z Binance API: {e}")
-        return None
-    except Exception as e:  # Zachytí všechny ostatní výjimky
-        logging.error(f"❌ Neočekávaná chyba: {e}")
-        return None
+        logging.error(f"❌ Jiná chyba při přístupu k Binance API: {e}")
     
+    return None  # Musíme vrátit None, pokud dojde k chybě
+
+# Přidání testovacího endpointu pro Binance API
+@app.route('/test_binance', methods=['GET'])
+def test_binance():
+    """Otestuje, zda Render.com může přistupovat k Binance API."""
+    price = get_current_xrp_price()
+    if price is None:
+        return jsonify({"success": False, "error": "Binance API blocked or unreachable"}), 500
+    return jsonify({"success": True, "price": price})
 
 # Nastavení cesty a načtení modelu
 base_path = os.path.dirname(os.path.abspath(__file__))
@@ -73,11 +67,7 @@ app = Flask(__name__)
 # Endpoint pro automatickou predikci
 @app.route('/predict', methods=['POST'])
 def predict():
-    """Endpoint pro zpracování požadavku na predikci.
-
-    Očekává POST požadavek s API klíčem v těle požadavku ve formátu JSON.
-    """
-    # Získání API klíče z požadavku
+    """Endpoint pro zpracování požadavku na predikci."""
     data = request.get_json()
     if not data:
         return jsonify({'error': 'Missing JSON in request'}), 400
