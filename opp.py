@@ -20,34 +20,27 @@ logging.info(f"Number of API keys loaded: {len(VALID_API_KEYS)}")
 
 # Funkce pro získání aktuální ceny XRP z Binance API
 def get_current_xrp_price():
-    """Fetches the current XRP price from the Binance API.
-
-    Returns:
-        float: The current XRP price, or None if an error occurs.
-    """
     try:
-        url = "https://api.binance.com/api/v3/ticker/price?symbol=XRPUSDT"
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=usd"
         response = requests.get(url)
         data = response.json()
 
-        logging.debug(f"Binance API response: {data}")  # Debug log
-
-        if "price" in data:
-            current_price = float(data["price"])
+        # Ověření, zda data obsahují cenu
+        if 'ripple' in data and 'usd' in data['ripple']:
+            current_price = float(data['ripple']['usd'])
             logging.info(f"Current XRP price fetched: {current_price}")
             return current_price
         else:
-            logging.error(f"API response does not contain 'price' key! Response: {data}")
+            logging.error(f"Invalid response format from CoinGecko: {data}")
             return None
-
     except requests.exceptions.RequestException as e:
-        logging.error(f"Error fetching XRP price: {e}")
+        logging.error(f"Error fetching XRP price from CoinGecko: {e}")
         return None
     except ValueError as e:
-        logging.error(f"Invalid data format: {e}")
+        logging.error(f"Invalid data format from CoinGecko: {e}")
         return None
-    except Exception as e:  # Zachytí všechny ostatní výjimky
-        logging.error(f"Unexpected error: {e}")
+    except Exception as e:
+        logging.error(f"Unexpected error from CoinGecko: {e}")
         return None
 
 # Nastavení cesty a načtení modelu
