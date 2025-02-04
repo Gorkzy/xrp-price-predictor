@@ -64,42 +64,47 @@ app = Flask(__name__)
 # Endpoint pro automatickou predikci
 @app.route('/predict', methods=['POST'])
 def predict():
-    """Endpoint pro zpracování požadavku na predikci.
+    logging.info("🔹 Přijat požadavek na predikci")
 
-    Očekává POST požadavek s API klíčem v těle požadavku ve formátu JSON.
-    """
-    # Získání API klíče z požadavku
-    data = request.get_json()
+    # Získání JSON dat
+    try:
+        data = request.get_json()
+        logging.info(f"📩 Přijatá data: {data}")
+    except Exception as e:
+        logging.error(f"⛔ Chyba při čtení JSON: {e}")
+        return jsonify({'error': 'Invalid JSON'}), 400
+
     if not data:
+        logging.error("⛔ Chybí JSON v požadavku")
         return jsonify({'error': 'Missing JSON in request'}), 400
 
     api_key = data.get('api_key')
+    logging.info(f"🔑 Přijatý API klíč: {api_key}")
 
-    # Ověření platnosti API klíče
+    # Ověření API klíče
     if api_key not in VALID_API_KEYS:
-        logging.warning(f"Invalid API key: {api_key}")
+        logging.warning("⚠️ Neplatný API klíč!")
         return jsonify({'error': 'Invalid API key'}), 401
 
-    # Získání aktuální ceny XRP
+    # Získání ceny XRP
     current_price = get_current_xrp_price()
+    logging.info(f"💰 Aktuální cena XRP: {current_price}")
 
     if current_price is None:
+        logging.error("⛔ Nepodařilo se získat cenu XRP!")
         return jsonify({'error': 'Could not fetch current XRP price'}), 500
 
+    # Příprava vstupu pro model
     try:
-        # Vytvoření vstupu pro model (použijeme stejnou hodnotu pro 'open' a 'close')
         X = np.array([[current_price, current_price]])
-
-        # Predikce
         prediction = model.predict(X)
         predicted_price = float(prediction[0][0])
 
-        # Návrat výsledku jako JSON
-        logging.info(f"Prediction successful: current_price={current_price}, predicted_price={predicted_price}")
+        logging.info(f"✅ Úspěšná predikce: {predicted_price}")
         return jsonify({'current_price': current_price, 'predicted_price': predicted_price})
-    
+
     except Exception as e:
-        logging.error(f"Prediction error: {e}")
+        logging.error(f"⛔ Chyba při predikci: {e}")
         return jsonify({'error': 'Prediction failed'}), 500
 
 # Definování cesty k šabloně
