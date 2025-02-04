@@ -18,6 +18,9 @@ VALID_API_KEYS = set(os.getenv('VALID_API_KEYS', '').split(','))
 # Debugging: Log počet načtených API klíčů
 logging.info(f"🔑 Number of API keys loaded: {len(VALID_API_KEYS)}")
 
+# 🛠️ **Inicializace Flask aplikace před použitím @app.route()**
+app = Flask(__name__)
+
 # Funkce pro získání aktuální ceny XRP z Binance API
 def get_current_xrp_price():
     """Získá aktuální cenu XRP z Binance API."""
@@ -60,9 +63,6 @@ try:
 except Exception as e:
     logging.error(f"❌ Error loading model: {e}")
     raise
-
-# Inicializace aplikace Flask
-app = Flask(__name__)
 
 # Endpoint pro automatickou predikci
 @app.route('/predict', methods=['POST'])
