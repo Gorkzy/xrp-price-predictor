@@ -25,36 +25,46 @@ def get_current_xrp_price():
     Returns:
         float: The current XRP price, or None if an error occurs.
     """
+    binance_url = "https://api.binance.com/api/v3/ticker/price?symbol=XRPUSDT"
+    
     try:
-        url = "https://api.binance.com/api/v3/ticker/price?symbol=XRPUSDT"
-        response = requests.get(url)
+        response = requests.get(binance_url, timeout=5)
+        response.raise_for_status()  # Vyvolá výjimku pro HTTP chyby (např. 404, 500)
         data = response.json()
-        current_price = float(data['price'])
-        logging.info(f"Current XRP price fetched: {current_price}")
+
+        # Kontrola, zda odpověď obsahuje klíč 'price'
+        if "price" not in data:
+            logging.error(f"Unexpected Binance API response: {data}")
+            return None
+
+        current_price = float(data["price"])
+        logging.info(f"💰 Aktuální cena XRP: {current_price}")
         return current_price
+
     except requests.exceptions.RequestException as e:
-        logging.error(f"Error fetching XRP price: {e}")
+        logging.error(f"❌ Chyba při získávání dat z Binance API: {e}")
         return None
     except ValueError as e:
-        logging.error(f"Invalid data format: {e}")
+        logging.error(f"❌ Neplatný formát dat z Binance API: {e}")
         return None
     except Exception as e:  # Zachytí všechny ostatní výjimky
-        logging.error(f"Unexpected error: {e}")
+        logging.error(f"❌ Neočekávaná chyba: {e}")
         return None
+    
 
 # Nastavení cesty a načtení modelu
 base_path = os.path.dirname(os.path.abspath(__file__))
 model_path = os.path.join(base_path, "xrp_model.h5")
 
 if not os.path.exists(model_path):
-    logging.error(f"Model file not found at {model_path}")
+    logging.error(f"❌ Model file not found at {model_path}")
     raise FileNotFoundError("Model file not found")
 
 try:
     model = load_model(model_path, compile=False)
-    logging.info(f"Model loaded successfully from {model_path}")
+    logging.info(f"✅ Model loaded successfully from {model_path}")
 except Exception as e:
-    logging.error(f"Error loading model: {e}")
+    logging.error(f"❌ Error loading model: {e}")
     raise
 
 # Inicializace aplikace Flask
@@ -76,7 +86,7 @@ def predict():
 
     # Ověření platnosti API klíče
     if api_key not in VALID_API_KEYS:
-        logging.warning(f"Invalid API key: {api_key}")
+        logging.warning(f"⚠ Neplatný API klíč: {api_key}")
         return jsonify({'error': 'Invalid API key'}), 401
 
     # Získání aktuální ceny XRP
@@ -89,12 +99,17 @@ def predict():
     X = np.array([[current_price, current_price]])
 
     # Predikce
-    prediction = model.predict(X)
-    predicted_price = float(prediction[0][0])
+    try:
+        prediction = model.predict(X)
+        predicted_price = float(prediction[0][0])
 
-    # Návrat výsledku jako JSON
-    logging.info(f"Prediction successful: current_price={current_price}, predicted_price={predicted_price}")
-    return jsonify({'current_price': current_price, 'predicted_price': predicted_price})
+        # Návrat výsledku jako JSON
+        logging.info(f"✅ Prediction successful: current_price={current_price}, predicted_price={predicted_price}")
+        return jsonify({'current_price': current_price, 'predicted_price': predicted_price})
+
+    except Exception as e:
+        logging.error(f"❌ Chyba při predikci: {e}")
+        return jsonify({'error': 'Prediction error'}), 500
 
 # Definování cesty k šabloně
 @app.route('/')
@@ -102,5 +117,5 @@ def index():
     return render_template('index.html')
 
 if __name__ == '__main__':
-    logging.info("Starting Flask server...")
+    logging.info("🚀 Starting Flask server...")
     app.run(host='0.0.0.0', port=5000, debug=True)
