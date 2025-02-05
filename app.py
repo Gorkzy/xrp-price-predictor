@@ -118,5 +118,6 @@ def index():
     return render_template('index.html')
 
 if __name__ == '__main__':
-    logging.info("Starting Flask server...")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    port = int(os.environ.get('PORT', 8080))  # Použij správný port
+    logging.info(f"Starting Flask server on port {port}...")
+    app.run(host='0.0.0.0', port=port, debug=True)
