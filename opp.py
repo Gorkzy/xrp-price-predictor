@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %
 VALID_API_KEYS = set(os.getenv('VALID_API_KEYS', '').split(','))
 
 # Debugging: Log počet načtených API klíčů (bez jejich obsahu)
-logging.info(f"Number of API keys loaded: {len(VALID_API_KEYS)}")
+logging.info(f"VALID_API_KEYS set: {VALID_API_KEYS}")
 
 # Funkce pro získání aktuální ceny XRP z Binance API
 def get_current_xrp_price():
