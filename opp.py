@@ -10,8 +10,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Nastavení logování
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 # Načtení API klíčů z environment variables
 VALID_API_KEYS = set(os.getenv('VALID_API_KEYS', '').split(','))
 
@@ -56,6 +56,11 @@ except Exception as e:
 app = Flask(__name__)
 
 # Endpoint pro automatickou predikci
+@app.route("/", methods=["GET"])
+def home():
+    logger.debug("Root endpoint accessed")
+    return "Flask server is running!", 200 
+
 @app.route('/predict', methods=['POST'])
 def predict():
     """Endpoint pro zpracování požadavku na predikci."""
