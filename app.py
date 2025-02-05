@@ -6,7 +6,7 @@ import logging
 import requests  # Import knihovny pro HTTP požadavky
 
 # Nastavení logování
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def my_function():
     logging.info("Starting function...")

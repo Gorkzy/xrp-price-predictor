@@ -11,7 +11,7 @@ env_variables:
   VALID_API_KEYS: "maxim-pidaras6944,tom-mimon22f,misa-auditt22,user4-9c6a4f7e2d1b5e8c"
   SECRET_KEY: "your-secret-key"
   DEBUG_MODE: "False"
-
+  DEBUG: "True"
 handlers:
 - url: /.*
   script: auto
