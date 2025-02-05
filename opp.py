@@ -95,4 +95,4 @@ def index():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))  # Google Cloud Run používá proměnnou PORT
     logging.info(f"🚀 Starting Flask server on port {port}...")
-    app.run(host='0.0.0.0', port=port)
+    app.run(host="0.0.0.0", port=8080, debug=True)
