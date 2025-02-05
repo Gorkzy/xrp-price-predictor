@@ -6,6 +6,7 @@ from tensorflow.keras.models import load_model  # type: ignore
 import logging
 import requests  # Import knihovny pro HTTP požadavky
 from dotenv import load_dotenv
+import traceback
 
 # Načti proměnné z .env souboru (pro lokální testování)
 load_dotenv()
@@ -107,8 +108,9 @@ def predict():
         return jsonify({'current_price': current_price, 'predicted_price': predicted_price})
     
     except Exception as e:
-        logging.error(f"Prediction error: {e}")
-        return jsonify({'error': 'Prediction failed'}), 500
+        error_message = traceback.format_exc()
+        logging.error(f"❌ Chyba při predikci: {error_message}")
+        return jsonify({'error': str(e), 'traceback': error_message}), 500
 
 # Definování cesty k šabloně
 @app.route('/')
