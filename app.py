@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Nastavení logování
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Načtení API klíčů z environment variables
 VALID_API_KEYS = set(os.getenv('VALID_API_KEYS', '').split(','))
