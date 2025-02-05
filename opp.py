@@ -77,25 +77,25 @@ def predict():
 
     Očekává POST požadavek s API klíčem v těle požadavku ve formátu JSON.
     """
-    # Získání API klíče z požadavku
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'Missing JSON in request'}), 400
-
-    api_key = data.get('api_key')
-
-    # Ověření platnosti API klíče
-    if api_key not in VALID_API_KEYS:
-        logging.warning(f"Invalid API key: {api_key}")
-        return jsonify({'error': 'Invalid API key'}), 401
-
-    # Získání aktuální ceny XRP
-    current_price = get_current_xrp_price()
-
-    if current_price is None:
-        return jsonify({'error': 'Could not fetch current XRP price'}), 500
-
     try:
+        # Získání API klíče z požadavku
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Missing JSON in request'}), 400
+
+        api_key = data.get('api_key')
+
+        # Ověření platnosti API klíče
+        if api_key not in VALID_API_KEYS:
+            logging.warning(f"Invalid API key: {api_key}")
+            return jsonify({'error': 'Invalid API key'}), 401
+
+        # Získání aktuální ceny XRP
+        current_price = get_current_xrp_price()
+
+        if current_price is None:
+            return jsonify({'error': 'Could not fetch current XRP price'}), 500
+
         # Vytvoření vstupu pro model (použijeme stejnou hodnotu pro 'open' a 'close')
         X = np.array([[current_price, current_price]])
 
