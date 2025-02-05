@@ -1,7 +1,3 @@
-jisti se, že obsahuje všechny potřebné klíče. Měl by vypadat nějak takto:
-yaml
-Zkopírovat
-Upravit
 runtime: python310
 entrypoint: gunicorn -b :$PORT opp:app
 
