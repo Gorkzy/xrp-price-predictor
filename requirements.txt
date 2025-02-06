@@ -74,4 +74,4 @@ urllib3
 Werkzeug
 wrapt
 wheel
-setuptoolsgcloud 
+setuptools
