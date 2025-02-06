@@ -15,10 +15,10 @@ load_dotenv()
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Načtení API klíčů z environment variables
-VALID_API_KEYS = set(os.getenv('VALID_API_KEYS', '').split(','))
+VALID_API_KEYS = set(filter(None, os.environ.get('VALID_API_KEYS', '').split(',')))
 
 # Debugging: Log počet načtených API klíčů (bez jejich obsahu)
-logging.info(f"VALID_API_KEYS set: {VALID_API_KEYS}")
+logging.info(f"✅ Načtené API klíče: {VALID_API_KEYS}")
 
 # Funkce pro získání aktuální ceny XRP z Binance API
 def get_current_xrp_price():
@@ -73,40 +73,31 @@ app = Flask(__name__)
 # Endpoint pro automatickou predikci
 @app.route('/predict', methods=['POST'])
 def predict():
-    """Endpoint pro zpracování požadavku na predikci.
-
-    Očekává POST požadavek s API klíčem v těle požadavku ve formátu JSON.
-    """
     try:
-        # Získání API klíče z požadavku
         data = request.get_json()
+        logging.info(f"📥 Přijatá data: {data}")  # Výpis dat z requestu
+
         if not data:
             return jsonify({'error': 'Missing JSON in request'}), 400
 
         api_key = data.get('api_key')
+        logging.info(f"🔑 API klíč v požadavku: {api_key}")
 
-        # Ověření platnosti API klíče
         if api_key not in VALID_API_KEYS:
-            logging.warning(f"Invalid API key: {api_key}")
+            logging.warning(f"❌ Neplatný API klíč: {api_key} (Načtené klíče: {VALID_API_KEYS})")
             return jsonify({'error': 'Invalid API key'}), 401
 
-        # Získání aktuální ceny XRP
         current_price = get_current_xrp_price()
-
         if current_price is None:
             return jsonify({'error': 'Could not fetch current XRP price'}), 500
 
-        # Vytvoření vstupu pro model (použijeme stejnou hodnotu pro 'open' a 'close')
         X = np.array([[current_price, current_price]])
-
-        # Predikce
         prediction = model.predict(X)
         predicted_price = float(prediction[0][0])
 
-        # Návrat výsledku jako JSON
-        logging.info(f"Prediction successful: current_price={current_price}, predicted_price={predicted_price}")
+        logging.info(f"✅ Prediction successful: {predicted_price}")
         return jsonify({'current_price': current_price, 'predicted_price': predicted_price})
-    
+
     except Exception as e:
         error_message = traceback.format_exc()
         logging.error(f"❌ Chyba při predikci: {error_message}")
