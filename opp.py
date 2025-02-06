@@ -8,6 +8,7 @@ import requests  # Import knihovny pro HTTP požadavky
 from google.cloud import storage  # Google Cloud Storage
 from dotenv import load_dotenv
 import traceback
+from google.cloud import error_reporting
 
 # Načti proměnné z .env souboru (pro lokální testování)
 load_dotenv()
@@ -53,6 +54,14 @@ except Exception as e:
 
 # Inicializace aplikace Flask
 app = Flask(__name__)
+# Inicializace Google Cloud Error Reporting
+client = error_reporting.Client()
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Zachytí všechny chyby v aplikaci a pošle je do Google Cloud Error Reporting"""
+    client.report_exception()  # Nahlásí chybu do Google Cloud
+    return jsonify({"error": str(e)}), 500
 app.config["PROPAGATE_EXCEPTIONS"] = True  # Logování detailních chyb
 
 @app.route("/debug-env")

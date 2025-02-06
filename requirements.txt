@@ -76,3 +76,4 @@ wrapt
 wheel
 setuptools
 google-cloud-storage
+google-cloud-error-reporting
