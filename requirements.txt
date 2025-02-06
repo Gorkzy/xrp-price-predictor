@@ -75,3 +75,4 @@ Werkzeug
 wrapt
 wheel
 setuptools
+google-cloud-storage
