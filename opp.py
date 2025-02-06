@@ -78,6 +78,13 @@ except Exception as e:
 # Inicializace aplikace Flask
 app = Flask(__name__)
 
+@app.route("/debug-env")
+def debug_env():
+    return {
+        "CUDA_VISIBLE_DEVICES": os.environ.get("CUDA_VISIBLE_DEVICES", "NOT SET"),
+        "TF_CPP_MIN_LOG_LEVEL": os.environ.get("TF_CPP_MIN_LOG_LEVEL", "NOT SET"),
+    }
+
 # Endpoint pro automatickou predikci
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -120,3 +127,4 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))  # Použij správný port
     logging.info(f"Starting Flask server on port {port}...")
     app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(debug=True)
