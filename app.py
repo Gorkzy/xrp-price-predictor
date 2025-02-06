@@ -15,7 +15,14 @@ load_dotenv()
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Načtení API klíčů z environment variables
-VALID_API_KEYS = set(filter(None, os.environ.get('VALID_API_KEYS', '').split(',')))
+VALID_API_KEYS = os.environ.get('VALID_API_KEYS')
+if VALID_API_KEYS is None:
+    logging.error("VALID_API_KEYS is not set in environment variables!")
+    # Zde by bylo vhodné aplikaci ukončit, pokud jsou API klíče kritické.
+    # raise ValueError("VALID_API_KEYS must be set.")
+else:
+    VALID_API_KEYS = set(filter(None, VALID_API_KEYS.split(',')))
+    logging.info(f"✅ Načtené API klíče: {VALID_API_KEYS}")
 
 # Debugging: Log počet načtených API klíčů (bez jejich obsahu)
 logging.info(f"✅ Načtené API klíče: {VALID_API_KEYS}")
