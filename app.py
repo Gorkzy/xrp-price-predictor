@@ -1,112 +1,121 @@
-from flask import Flask, render_template, request, jsonify
-import numpy as np
-import os
-from tensorflow.keras.models import load_model  # type: ignore
-import logging
-import requests  # Import knihovny pro HTTP požadavky
+from flask import Flask, render_template, request, jsonify 
+import numpy as np 
+import os 
+import logging 
+import requests 
+from google.cloud import storage, error_reporting 
+from dotenv import load_dotenv 
+import traceback 
+from tensorflow.keras.models import load_model  # type: ignore 
 
-# Nastavení logování
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# 💾 Načti proměnné z .env souboru (pro lokální testování) 
+load_dotenv() 
 
-# Platné API klíče
-VALID_API_KEYS = {
-    "maxim-pidaras6944",
-    "tom-mimon22",
-    "premium1-e5d1b9a4f7c6e3f",
-    "misa-auditt22",
-    "user4-9c6a4f7e2d1b5e8c",
-    "user1-8e3b5c6d9f1a4b7e",
-    "user2-4f9e6a7d8c2b1e3f",
-    "user3-5d8c1a4b7f9e2e6d",
-    "admin-a1b2c3d4e5f6g7h8",
-    "vip1-2e4d6f8a1b9c7e3f",
-    "test1-3e7c9a2d4f1b5e8f",
-    "guest1-6f1a9e3b7c2d5e4f",
-    "demo1-8c4f7e9a1b5d2e6f"
-}
+# 🚀 Vynucení použití CPU pro TensorFlow 
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1" 
+import tensorflow as tf 
 
-# Funkce pro získání aktuální ceny XRP z Binance API
-def get_current_xrp_price():
-    """Fetches the current XRP price from the Binance API.
+try: 
+    tf.config.set_visible_devices([], "GPU") 
+    logging.info("✅ GPU zakázáno. Používám CPU.") 
+except Exception as e: 
+    logging.warning(f"⚠️ Problém při zakázání GPU: {e}") 
 
-    Returns:
-        float: The current XRP price, or None if an error occurs.
-    """
-    try:
-        url = "https://api.binance.com/api/v3/ticker/price?symbol=XRPUSDT"
-        response = requests.get(url)
-        data = response.json()
-        current_price = float(data['price'])
-        logging.info(f"Current XRP price fetched: {current_price}")
-        return current_price
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error fetching XRP price: {e}")
-        return None
-    except ValueError as e:
-        logging.error(f"Invalid data format: {e}")
-        return None
-    except Exception as e:  # Zachytí všechny ostatní výjimky
-        logging.error(f"Unexpected error: {e}")
-        return None
+# 📝 Nastavení logování 
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s') 
 
-# Nastavení cesty a načtení modelu
-base_path = os.path.dirname(os.path.abspath(__file__))
-model_path = os.path.join(base_path, "xrp_model.h5")
+# 🔑 Načtení API klíčů 
+VALID_API_KEYS = set(os.getenv("VALID_API_KEYS", "").split(",")) 
+logging.info(f"✅ Načtené API klíče: {VALID_API_KEYS}") 
+if not VALID_API_KEYS: 
+    logging.error("❌ Chyba: API klíče nebyly nalezeny v prostředí!") 
 
-if not os.path.exists(model_path):
-    logging.error(f"Model file not found at {model_path}")
-    raise FileNotFoundError("Model file not found")
+# ☁️ Google Cloud Storage nastavení 
+BUCKET_NAME = "xrp-model-storage"  # Název bucketu 
+MODEL_FILE = "xrp_model.h5" 
+LOCAL_MODEL_PATH = "xrp_model.h5" 
 
-try:
-    model = load_model(model_path, compile=False)
-    logging.info(f"Model loaded successfully from {model_path}")
-except Exception as e:
-    logging.error(f"Error loading model: {e}")
-    raise
+# 📥 Stahování modelu 
 
-# Inicializace aplikace Flask
-app = Flask(__name__)
+def download_model(): 
+    try: 
+        client = storage.Client() 
+        bucket = client.bucket(BUCKET_NAME) 
+        blob = bucket.blob(MODEL_FILE) 
+        blob.download_to_filename(LOCAL_MODEL_PATH) 
+        logging.info(f"✅ Model úspěšně stažen do {LOCAL_MODEL_PATH}") 
+    except Exception as e: 
+        logging.error(f"❌ Chyba při stahování modelu: {e}") 
+        raise 
 
-# Endpoint pro automatickou predikci
-@app.route('/predict', methods=['POST'])
-def predict():
-    """Endpoint pro zpracování požadavku na predikci.
+download_model() 
 
-    Očekává POST požadavek s API klíčem v těle požadavku.
-    """
+# 📦 Načtení modelu 
+try: 
+    model = load_model(LOCAL_MODEL_PATH, compile=False) 
+    logging.info("✅ Model úspěšně načten.") 
+except Exception as e: 
+    logging.error(f"❌ Chyba při načítání modelu: {e}") 
+    raise 
 
-    # Získání API klíče z požadavku
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'Missing JSON in request'}), 400
+# 🔥 Inicializace aplikace Flask 
+app = Flask(__name__) 
 
-    api_key = data.get('api_key')
+# 🚨 Google Cloud Error Reporting 
+error_client = error_reporting.Client() 
 
-    # Ověření platnosti API klíče
-    if api_key not in VALID_API_KEYS:
-        return jsonify({'error': 'Invalid API key'}), 401
+def report_error(e): 
+    error_client.report_exception() 
+    return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500 
 
-    # Získání aktuální ceny XRP
-    current_price = get_current_xrp_price()
+@app.errorhandler(Exception) 
+def handle_exception(e): 
+    return report_error(e) 
 
-    if current_price is None:
-        return jsonify({'error': 'Could not fetch current XRP price'}), 500
+# 🔍 Debugovací endpoint 
+@app.route('/debug-env') 
+def debug_env(): 
+    return jsonify({ 
+        "CUDA_VISIBLE_DEVICES": os.getenv("CUDA_VISIBLE_DEVICES", "NOT SET"), 
+        "VALID_API_KEYS": os.getenv("VALID_API_KEYS", "NOT SET") 
+    }) 
 
-    # Vytvoření vstupu pro model (použijeme stejnou hodnotu pro 'open' a 'close')
-    X = np.array([[current_price, current_price]])
+# 📊 Získání aktuální ceny XRP 
 
-    # Predikce
-    prediction = model.predict(X)
-    predicted_price = float(prediction[0][0])
+def get_current_xrp_price(): 
+    try: 
+        url = "https://api.binance.com/api/v3/ticker/price?symbol=XRPUSDT" 
+        response = requests.get(url) 
+        data = response.json() 
+        return float(data["price"]) if "price" in data else None 
+    except Exception as e: 
+        logging.error(f"❌ Chyba při získávání ceny XRP: {e}") 
+        return None 
 
-    # Návrat výsledku jako JSON
-    return jsonify({'predicted_price': predicted_price})
+# 🔮 Predikční endpoint 
+@app.route('/predict', methods=['POST']) 
+def predict(): 
+    try: 
+        data = request.get_json() 
+        if not data or "api_key" not in data: 
+            return jsonify({"error": "Missing API key"}), 400 
+        if data["api_key"] not in VALID_API_KEYS: 
+            return jsonify({"error": "Invalid API key"}), 401 
+        current_price = get_current_xrp_price() 
+        if current_price is None: 
+            return jsonify({"error": "Failed to fetch XRP price"}), 500 
+        X = np.array([[current_price, current_price]]) 
+        prediction = model.predict(X) 
+        return jsonify({"current_price": current_price, "predicted_price": float(prediction[0][0])}) 
+    except Exception as e: 
+        return report_error(e) 
 
-# Definování cesty k šabloně
-@app.route('/')
-def index():
-    return render_template('index.html')
+# 🌍 Hlavní stránka 
+@app.route('/') 
+def index(): 
+    return render_template('index.html') 
 
-if __name__ == '__main__':
-    logging.info("Starting Flask server...")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+# 🚀 Spuštění aplikace 
+if __name__ == "__main__": 
+    app.run(host="0.0.0.0", port=8080)
+ 
