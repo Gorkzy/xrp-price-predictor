@@ -2,7 +2,8 @@ import os
 import logging
 import traceback
 import platform
-from flask import Flask, request, jsonify
+# from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 import numpy as np
 import requests
 from google.cloud import storage
@@ -72,10 +73,39 @@ except Exception as e:
 from VALID_API_KEYS import VALID_API_KEYS
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "moje_tajne_heslo")
+
+# @app.route('/')
+# def index():
+#     return render_template('index.html')
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    error = None
+    if request.method == 'POST':
+        # Získáme API klíč z formuláře
+        key = request.form.get('api_key')
+        # Načteme platné API klíče z prostředí nebo použijeme importované VALID_API_KEYS
+        env_api_keys = os.getenv("VALID_API_KEYS")
+        if env_api_keys:
+            valid_api_keys = set(env_api_keys.split(","))
+        else:
+            valid_api_keys = VALID_API_KEYS
+
+        if key in valid_api_keys:
+            session['logged_in'] = True
+            session['api_key'] = key
+            return redirect(url_for('index'))
+        else:
+            error = "Neplatný API klíč"
+    # Vždy zobrazíme stejnou šablonu (např. signin.html), která má přihlašovací formulář
+    return render_template("signin.html", error=error)
 
 @app.route('/')
 def index():
-    return "Vítejte na mé aplikaci!"
+    # Příklad hlavní stránky
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
+    return render_template("index.html")
 
 @app.route('/debug-env')
 def debug_env():
