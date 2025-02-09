@@ -1,5 +1,5 @@
 runtime: python310
-entrypoint: gunicorn -b :8080 app:app
+entrypoint: gunicorn -b :8080 full_app:app
 
 instance_class: F1
 automatic_scaling:
@@ -13,8 +13,8 @@ env_variables:
   SECRET_KEY: "FJGasjQaRyRKef5Gwm0dQgGxTR9_hUj9jAuHJXmnWZQ"
   DEBUG_MODE: "True"
   DEBUG: "True"
-handlers:
-- url: /.*
-  script: auto
-  secure: always
 
+# handlers:
+# - url: /.*
+#   script: auto
+#   secure: always
