@@ -1,25 +1,31 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
-from sklearn.model_selection import train_test_split
+from tensorflow.keras.layers import Dense, LSTM, Dropout
+from sklearn.model_selection import train_test_split  # Oprava chybějícího importu
 
 # Načtení dat
 X = np.load("X.npy")
 y = np.load("y.npy")
 
+# Reshape X, pokud je potřeba
+X = np.reshape(X, (X.shape[0], X.shape[1], 1))  # Přidání rozměru pro LSTM vrstvy
+
 # Rozdělení dat na trénovací a testovací sadu
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Vytvoření modelu
+# Vytvoření modelu s LSTM
 model = Sequential([
-    Dense(64, input_dim=X.shape[1], activation='relu'),  # Skrytá vrstva
-    Dense(64, activation='relu'),                       # Další skrytá vrstva
-    Dense(1)                                            # Výstupní vrstva
+    LSTM(50, return_sequences=True, input_shape=(X.shape[1], 1)),  # input_shape opraveno
+    Dropout(0.2),
+    LSTM(50, return_sequences=False),
+    Dropout(0.2),
+    Dense(25),  # Další skrytá vrstva
+    Dense(1)  # Výstupní vrstva pro predikci ceny
 ])
 
 # Kompilace modelu
-model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+model.compile(optimizer='adam', loss='mean_squared_error')
 
 # Trénink modelu
 print("Začíná trénink modelu...")
