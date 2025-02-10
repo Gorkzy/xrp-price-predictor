@@ -1,7 +1,11 @@
+# import numpy as np
+# from tensorflow.keras.models import load
+# from sklearn.metrics import mean_absolute_error
 import numpy as np
-from tensorflow.keras.models import load
+from tensorflow.keras.models import load_model
+from sklearn.preprocessing import MinMaxScaler
+import joblib
 from sklearn.metrics import mean_absolute_error
-
 # Načtení zpracovaných dat
 X = np.load("X.npy")
 y = np.load("y.npy")
