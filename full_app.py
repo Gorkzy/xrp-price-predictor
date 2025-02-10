@@ -156,13 +156,15 @@ def predict():
         current_price = get_current_xrp_price()
         if current_price is None:
             return jsonify({"error": "Failed to fetch XRP price"}), 500
+# Zaokrouhlíme aktuální cenu na 5 desetinných míst
+        current_price = round(current_price, 5)
 
         X = np.array([[current_price, current_price]])
         if model is None:
             predicted_price = 0.0
         else:
             prediction = model.predict(X)
-            predicted_price = float(prediction[0][0])
+            predicted_price = round(float(prediction[0][0]), 5)
         return jsonify({"current_price": current_price, "predicted_price": predicted_price})
     except Exception as e:
         logging.error(f"Error in /predict: {e}\n{traceback.format_exc()}")
