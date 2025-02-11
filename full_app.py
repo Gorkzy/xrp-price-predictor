@@ -2,18 +2,15 @@ import os
 import logging
 import traceback
 import platform
-# from flask import Flask, render_template, request, jsonify
+from tensorflow.keras.models import Model
+from tensorflow.keras.models import load_model
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 import numpy as np
 import requests
 from google.cloud import storage
 import tensorflow as tf
-
-# Primární import; pokud selže, použijeme alternativní cestu.
-try:
-    from tensorflow.keras.models import Model, load_model
-except ImportError:
-    from tensorflow.python.keras.models import Model, load_model  # type: ignore
+import joblib  # Import joblib pro načtení scalerů
+from sklearn.preprocessing import MinMaxScaler  # Import MinMaxScaler
 
 # Potlačíme nepodstatné logy TensorFlow
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
@@ -54,10 +51,10 @@ def download_model():
             logging.info(f"Soubor {LOCAL_MODEL_PATH} byl úspěšně stažen.")
         else:
             logging.error(f"Soubor {LOCAL_MODEL_PATH} nebyl nalezen po stažení!")
-        logging.info("Obsah /tmp: " + str(os.listdir("/tmp")))
     except Exception as e:
         logging.error(f"Error downloading model: {e}")
         logging.error("download_model() selhalo, pokračuji bez modelu.")
+
 # Voláme download_model() – ujistěte se, že váš služební účet má roli "Storage Object Viewer"
 download_model()
 
@@ -75,46 +72,7 @@ from VALID_API_KEYS import VALID_API_KEYS
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "moje_tajne_heslo")
 
-# @app.route('/')
-# def index():
-#     return render_template('index.html')
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    error = None
-    if request.method == 'POST':
-        # Získáme API klíč z formuláře
-        key = request.form.get('api_key')
-        # Načteme platné API klíče z prostředí nebo použijeme importované VALID_API_KEYS
-        env_api_keys = os.getenv("VALID_API_KEYS")
-        if env_api_keys:
-            valid_api_keys = set(env_api_keys.split(","))
-        else:
-            valid_api_keys = VALID_API_KEYS
-
-        if key in valid_api_keys:
-            session['logged_in'] = True
-            session['api_key'] = key
-            return redirect(url_for('index'))
-        else:
-            error = "Neplatný API klíč"
-    # Vždy zobrazíme stejnou šablonu (např. signin.html), která má přihlašovací formulář
-    return render_template("signin.html", error=error)
-
-@app.route('/')
-def index():
-    # Příklad hlavní stránky
-    if not session.get('logged_in'):
-        return redirect(url_for('login'))
-    return render_template("index.html")
-
-@app.route('/debug-env')
-def debug_env():
-    files = os.listdir(".")
-    return jsonify({
-        "CUDA_VISIBLE_DEVICES": os.getenv("CUDA_VISIBLE_DEVICES", "NOT SET"),
-        "VALID_API_KEYS_FROM_FILE": list(VALID_API_KEYS),
-        "files_in_root": files
-    })
+# ... (definice /login a /index endpointů) ...
 
 def get_current_xrp_price():
     try:
@@ -156,16 +114,45 @@ def predict():
         current_price = get_current_xrp_price()
         if current_price is None:
             return jsonify({"error": "Failed to fetch XRP price"}), 500
-# Zaokrouhlíme aktuální cenu na 5 desetinných míst
+
         current_price = round(current_price, 5)
 
         X = np.array([[current_price, current_price]])
+
+        # !!! KLÍČOVÁ ZMĚNA: Normalizace dat !!!
+        try:
+            scaler_X = joblib.load("scaler_X.pkl")  # Načtení scaleru
+            X_scaled = scaler_X.transform(X) # Normalizace
+
+            print("Tvar X před normalizací:", X.shape)
+            print("Hodnoty X před normalizací:", X)
+            print("Tvar X po normalizaci:", X_scaled.shape)
+            print("Hodnoty X po normalizaci:", X_scaled)
+
+        except Exception as e:
+            logging.error(f"Chyba při normalizaci dat: {e}")
+            return jsonify({"error": "Chyba při normalizaci dat"}), 500
+
+
         if model is None:
             predicted_price = 0.0
         else:
-            prediction = model.predict(X)
-            predicted_price = round(float(prediction[0][0]), 5)
+            prediction = model.predict(X_scaled) # Použij normalizovaná data
+
+            print("Predikce (před inverzní transformací):", prediction)
+
+            # !!! KLÍČOVÁ ZMĚNA: Inverzní transformace !!!
+            try:
+                scaler_y = joblib.load("scaler_y.pkl")
+                predicted_price = scaler_y.inverse_transform(prediction)
+                predicted_price = round(float(predicted_price[0][0]), 5)  # Změna: přístup k prvnímu prvku predikce
+                print("Predikce (po inverzní transformaci):", predicted_price)
+            except Exception as e:
+                logging.error(f"Chyba při inverzní transformaci: {e}")
+                return jsonify({"error": "Chyba při inverzní transformaci"}), 500
+
         return jsonify({"current_price": current_price, "predicted_price": predicted_price})
+
     except Exception as e:
         logging.error(f"Error in /predict: {e}\n{traceback.format_exc()}")
         return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
