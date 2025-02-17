@@ -2,15 +2,12 @@ import os
 import logging
 import traceback
 import platform
-from tensorflow.keras.models import Model
 from tensorflow.keras.models import load_model
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 import numpy as np
 import requests
-from google.cloud import storage
 import tensorflow as tf
-import joblib  # Import joblib pro načtení scalerů
-from sklearn.preprocessing import MinMaxScaler  # Import MinMaxScaler
+import joblib  # Pro načtení scalerů
 
 # Potlačíme nepodstatné logy TensorFlow
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
@@ -25,54 +22,56 @@ except Exception as e:
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Nastavení cesty pro uložení modelu:
-if platform.system() == "Windows":
-    LOCAL_MODEL_PATH = "xrp_model.h5"
-else:
-    LOCAL_MODEL_PATH = "/tmp/xrp_model.h5"
+# Globální proměnná: velikost posuvného okna (window size)
+WINDOW_SIZE = 5
 
-# Konfigurace Google Cloud Storage
-BUCKET_NAME = "xrp-model-storage"
-MODEL_FILE = "xrp_model.h5"
-
-def download_model():
-    try:
-        client = storage.Client()
-        bucket = client.bucket(BUCKET_NAME)
-        logging.info(f"Používám bucket: {bucket.name}")
-        blob = bucket.blob(MODEL_FILE)
-        if not blob.exists():
-            logging.error(f"Blob '{MODEL_FILE}' neexistuje v bucketu '{BUCKET_NAME}'!")
-        else:
-            logging.info(f"Blob '{MODEL_FILE}' nalezen, velikost: {blob.size} bytů")
-        blob.download_to_filename(LOCAL_MODEL_PATH)
-        logging.info(f"Model stažen do {LOCAL_MODEL_PATH}")
-        if os.path.exists(LOCAL_MODEL_PATH):
-            logging.info(f"Soubor {LOCAL_MODEL_PATH} byl úspěšně stažen.")
-        else:
-            logging.error(f"Soubor {LOCAL_MODEL_PATH} nebyl nalezen po stažení!")
-    except Exception as e:
-        logging.error(f"Error downloading model: {e}")
-        logging.error("download_model() selhalo, pokračuji bez modelu.")
-
-# Voláme download_model() – ujistěte se, že váš služební účet má roli "Storage Object Viewer"
-download_model()
-
-# Načtení modelu s explicitní typovou anotací; pokud dojde k chybě, nastavíme model na None
+# Načtení krátkodobého modelu a scalerů
 try:
-    model: Model = load_model(LOCAL_MODEL_PATH, compile=False)  # type: ignore
-    logging.info("Model loaded successfully")
+    model_short = load_model("xrp_model_short.h5", compile=False)
+    logging.info("Short-term model loaded successfully")
 except Exception as e:
-    logging.error(f"Error loading model: {e}")
-    model = None
+    logging.error(f"Error loading short-term model: {e}")
+    model_short = None
 
-# Import API klíčů ze souboru VALID_API_KEYS.py (soubor musí být ve stejném adresáři)
+try:
+    scaler_X_short = joblib.load("scaler_X_short.pkl")
+    scaler_y_short = joblib.load("scaler_y_short.pkl")
+    logging.info("Short-term scalers loaded successfully")
+except Exception as e:
+    logging.error(f"Error loading short-term scalers: {e}")
+    scaler_X_short = None
+    scaler_y_short = None
+
+# Načtení dlouhodobého modelu a scalerů
+try:
+    model_long = load_model("xrp_model_long.h5", compile=False)
+    logging.info("Long-term model loaded successfully")
+except Exception as e:
+    logging.error(f"Error loading long-term model: {e}")
+    model_long = None
+
+try:
+    scaler_X_long = joblib.load("scaler_X_long.pkl")
+    scaler_y_long = joblib.load("scaler_y_long.pkl")
+    logging.info("Long-term scalers loaded successfully")
+except Exception as e:
+    logging.error(f"Error loading long-term scalers: {e}")
+    scaler_X_long = None
+    scaler_y_long = None
+
+# Import API klíčů
 from VALID_API_KEYS import VALID_API_KEYS
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='.')
 app.secret_key = os.environ.get("SECRET_KEY", "moje_tajne_heslo")
 
-# ... (definice /login a /index endpointů) ...
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/signin')
+def signin():
+    return render_template('signin.html')
 
 def get_current_xrp_price():
     try:
@@ -102,6 +101,7 @@ def predict():
         if not data or "api_key" not in data:
             return jsonify({"error": "Missing API key"}), 400
 
+        # Ověření API klíče
         env_api_keys = os.getenv("VALID_API_KEYS")
         if env_api_keys:
             valid_api_keys = set(env_api_keys.split(","))
@@ -111,47 +111,53 @@ def predict():
         if data["api_key"] not in valid_api_keys:
             return jsonify({"error": "Invalid API key"}), 401
 
+        # Volba modelu: "short" nebo "long" (výchozí je "short")
+        model_type = data.get("model_type", "short").lower()
+        if model_type not in ["short", "long"]:
+            return jsonify({"error": "Invalid model_type. Must be 'short' or 'long'"}), 400
+
         current_price = get_current_xrp_price()
         if current_price is None:
             return jsonify({"error": "Failed to fetch XRP price"}), 500
 
         current_price = round(current_price, 5)
+        # Vytvoření vstupních dat – pole s opakovanou hodnotou ceny, délky WINDOW_SIZE
+        X_input = np.array([[current_price] * WINDOW_SIZE])
 
-        X = np.array([[current_price, current_price]])
+        if model_type == "short":
+            if scaler_X_short is None or scaler_y_short is None:
+                return jsonify({"error": "Short-term scalers not loaded"}), 500
+            X_scaled = scaler_X_short.transform(X_input)
+            if model_short is None:
+                predicted_price = 0.0
+            else:
+                prediction = model_short.predict(X_scaled)
+                try:
+                    predicted_price_arr = scaler_y_short.inverse_transform(prediction)
+                    predicted_price = round(float(predicted_price_arr[0][0]), 5)
+                except Exception as e:
+                    logging.error(f"Error in inverse transform for short-term model: {e}")
+                    return jsonify({"error": "Error in inverse transform for short-term model"}), 500
+        else:  # long-term
+            if scaler_X_long is None or scaler_y_long is None:
+                return jsonify({"error": "Long-term scalers not loaded"}), 500
+            X_scaled = scaler_X_long.transform(X_input)
+            if model_long is None:
+                predicted_price = 0.0
+            else:
+                prediction = model_long.predict(X_scaled)
+                try:
+                    predicted_price_arr = scaler_y_long.inverse_transform(prediction)
+                    predicted_price = round(float(predicted_price_arr[0][0]), 5)
+                except Exception as e:
+                    logging.error(f"Error in inverse transform for long-term model: {e}")
+                    return jsonify({"error": "Error in inverse transform for long-term model"}), 500
 
-        # !!! KLÍČOVÁ ZMĚNA: Normalizace dat !!!
-        try:
-            scaler_X = joblib.load("scaler_X.pkl")  # Načtení scaleru
-            X_scaled = scaler_X.transform(X) # Normalizace
-
-            print("Tvar X před normalizací:", X.shape)
-            print("Hodnoty X před normalizací:", X)
-            print("Tvar X po normalizaci:", X_scaled.shape)
-            print("Hodnoty X po normalizaci:", X_scaled)
-
-        except Exception as e:
-            logging.error(f"Chyba při normalizaci dat: {e}")
-            return jsonify({"error": "Chyba při normalizaci dat"}), 500
-
-
-        if model is None:
-            predicted_price = 0.0
-        else:
-            prediction = model.predict(X_scaled) # Použij normalizovaná data
-
-            print("Predikce (před inverzní transformací):", prediction)
-
-            # !!! KLÍČOVÁ ZMĚNA: Inverzní transformace !!!
-            try:
-                scaler_y = joblib.load("scaler_y.pkl")
-                predicted_price = scaler_y.inverse_transform(prediction)
-                predicted_price = round(float(predicted_price[0][0]), 5)  # Změna: přístup k prvnímu prvku predikce
-                print("Predikce (po inverzní transformaci):", predicted_price)
-            except Exception as e:
-                logging.error(f"Chyba při inverzní transformaci: {e}")
-                return jsonify({"error": "Chyba při inverzní transformaci"}), 500
-
-        return jsonify({"current_price": current_price, "predicted_price": predicted_price})
+        return jsonify({
+            "current_price": current_price,
+            "predicted_price": predicted_price,
+            "model_type": model_type
+        })
 
     except Exception as e:
         logging.error(f"Error in /predict: {e}\n{traceback.format_exc()}")
