@@ -22,8 +22,9 @@ except Exception as e:
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Globální proměnná: velikost posuvného okna (window size)
-WINDOW_SIZE = 5
+# Nastavíme okna pro oba modely
+WINDOW_SIZE_SHORT = 5   # Krátkodobý model
+WINDOW_SIZE_LONG = 10   # Dlouhodobý model
 
 # Načtení krátkodobého modelu a scalerů
 try:
@@ -121,37 +122,50 @@ def predict():
             return jsonify({"error": "Failed to fetch XRP price"}), 500
 
         current_price = round(current_price, 5)
-        # Vytvoření vstupních dat – pole s opakovanou hodnotou ceny, délky WINDOW_SIZE
-        X_input = np.array([[current_price] * WINDOW_SIZE])
 
+        # Nastavíme okno a příslušné scalery podle model_type
         if model_type == "short":
+            window_size = WINDOW_SIZE_SHORT
             if scaler_X_short is None or scaler_y_short is None:
                 return jsonify({"error": "Short-term scalers not loaded"}), 500
-            X_scaled = scaler_X_short.transform(X_input)
-            if model_short is None:
-                predicted_price = 0.0
-            else:
-                prediction = model_short.predict(X_scaled)
-                try:
-                    predicted_price_arr = scaler_y_short.inverse_transform(prediction)
-                    predicted_price = round(float(predicted_price_arr[0][0]), 5)
-                except Exception as e:
-                    logging.error(f"Error in inverse transform for short-term model: {e}")
-                    return jsonify({"error": "Error in inverse transform for short-term model"}), 500
+            model_used = model_short
+            scaler_X_used = scaler_X_short
+            scaler_y_used = scaler_y_short
         else:  # long-term
+            window_size = WINDOW_SIZE_LONG
             if scaler_X_long is None or scaler_y_long is None:
                 return jsonify({"error": "Long-term scalers not loaded"}), 500
-            X_scaled = scaler_X_long.transform(X_input)
-            if model_long is None:
-                predicted_price = 0.0
-            else:
-                prediction = model_long.predict(X_scaled)
-                try:
-                    predicted_price_arr = scaler_y_long.inverse_transform(prediction)
-                    predicted_price = round(float(predicted_price_arr[0][0]), 5)
-                except Exception as e:
-                    logging.error(f"Error in inverse transform for long-term model: {e}")
-                    return jsonify({"error": "Error in inverse transform for long-term model"}), 500
+            model_used = model_long
+            scaler_X_used = scaler_X_long
+            scaler_y_used = scaler_y_long
+
+        # Vytvoření vstupních dat – pole se stejnou hodnotou aktuální ceny o délce window_size
+        X_input = np.array([[current_price] * window_size])
+
+        # Normalizace vstupních dat
+        try:
+            X_scaled = scaler_X_used.transform(X_input)
+            logging.info(f"Tvar X před normalizací: {X_input.shape}")
+            logging.info(f"Hodnoty X před normalizací: {X_input}")
+            logging.info(f"Tvar X po normalizaci: {X_scaled.shape}")
+            logging.info(f"Hodnoty X po normalizaci: {X_scaled}")
+        except Exception as e:
+            logging.error(f"Chyba při normalizaci dat: {e}")
+            return jsonify({"error": "Chyba při normalizaci dat"}), 500
+
+        # Predikce
+        if model_used is None:
+            predicted_price = 0.0
+        else:
+            prediction = model_used.predict(X_scaled)
+            logging.info(f"Predikce (před inverzní transformací): {prediction}")
+            try:
+                predicted_price_arr = scaler_y_used.inverse_transform(prediction)
+                predicted_price = round(float(predicted_price_arr[0][0]), 5)
+                logging.info(f"Predikce (po inverzní transformaci): {predicted_price}")
+            except Exception as e:
+                logging.error(f"Chyba při inverzní transformaci: {e}")
+                return jsonify({"error": "Chyba při inverzní transformaci"}), 500
 
         return jsonify({
             "current_price": current_price,
