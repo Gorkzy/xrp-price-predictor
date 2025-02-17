@@ -47,7 +47,8 @@
         </div>
         <h1>Predikce ceny XRP</h1>
         <form id="predictForm">
-            <input type="hidden" id="api-key" name="api_key" value="">
+            <!-- Uživatel nyní zadává svůj vlastní API klíč -->
+            <input type="text" id="api-key" name="api_key" placeholder="Zadejte API klíč" required>
             <label for="model_type">Typ modelu:</label>
             <select id="model_type" name="model_type">
                 <option value="short" selected>Krátkodobý</option>
@@ -60,23 +61,19 @@
     </div>
 
     <script>
-        // Získání API klíče – upravte dle potřeby
-        const apiKey = "maxim-pidaras6944";
-
-        // Nastavení hodnoty API klíče do skrytého inputu
-        document.getElementById('api-key').value = apiKey;
-
-        // Odeslání požadavku a zpracování odpovědi
+        // Odstranili jsme hardcodovaný klíč, takže se bude používat to, co zadá uživatel
         const form = document.getElementById('predictForm');
         form.addEventListener('submit', (event) => {
             event.preventDefault();
+            // Získání API klíče z formuláře
+            const userApiKey = document.getElementById('api-key').value;
             const modelType = document.getElementById('model_type').value;
             fetch('/predict', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ api_key: apiKey, model_type: modelType })
+                body: JSON.stringify({ api_key: userApiKey, model_type: modelType })
             })
             .then(response => {
                 if (!response.ok) {
