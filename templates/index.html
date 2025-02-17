@@ -2,8 +2,6 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <!-- Pro responzivitu -->
-    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Predikce ceny XRP</title>
     <style>
         body {
@@ -14,37 +12,56 @@
         }
         .container {
             background-color: #fff;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            display: inline-block;
-            max-width: 90%;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.15);
+            max-width: 600px;
+            margin: auto;
         }
         button {
             padding: 10px 20px;
             font-size: 16px;
             cursor: pointer;
+            margin-top: 10px;
         }
         #result {
-            margin-top: 20px;
+            margin-top: 30px;
             font-size: 18px;
             color: #333;
+        }
+        .nav {
+            margin-bottom: 20px;
+        }
+        .nav a {
+            margin: 0 10px;
+            text-decoration: none;
+            color: #0066cc;
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <div class="nav">
+            <a href="/">Domů</a>
+            <a href="/signin">Přihlášení</a>
+        </div>
         <h1>Predikce ceny XRP</h1>
         <form id="predictForm">
             <input type="hidden" id="api-key" name="api_key" value="">
+            <label for="model_type">Typ modelu:</label>
+            <select id="model_type" name="model_type">
+                <option value="short" selected>Krátkodobý</option>
+                <option value="long">Dlouhodobý</option>
+            </select>
+            <br>
             <button type="submit">Predikovat</button>
         </form>
         <div id="result"></div>
     </div>
 
     <script>
-        // Získání API klíče (můžeš upravit, pokud máš třeba dynamické načítání)
-        const apiKey = "maxim-pidaras6944"; 
+        // Získání API klíče – upravte dle potřeby
+        const apiKey = "maxim-pidaras6944";
 
         // Nastavení hodnoty API klíče do skrytého inputu
         document.getElementById('api-key').value = apiKey;
@@ -53,13 +70,13 @@
         const form = document.getElementById('predictForm');
         form.addEventListener('submit', (event) => {
             event.preventDefault();
-
+            const modelType = document.getElementById('model_type').value;
             fetch('/predict', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ api_key: apiKey })
+                body: JSON.stringify({ api_key: apiKey, model_type: modelType })
             })
             .then(response => {
                 if (!response.ok) {
@@ -68,10 +85,9 @@
                 return response.json();
             })
             .then(data => {
-                console.log(data);
                 document.getElementById('result').innerHTML = `
                     <p>Aktuální cena XRP: <strong>${data.current_price}</strong></p>
-                    <p>Předpokládaná cena: <strong>${data.predicted_price}</strong></p>
+                    <p>Předpokládaná cena (${data.model_type} model): <strong>${data.predicted_price}</strong></p>
                 `;
             })
             .catch(error => {
