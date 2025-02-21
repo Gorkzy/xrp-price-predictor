@@ -102,30 +102,32 @@ app.secret_key = os.environ.get("SECRET_KEY", "moje_tajne_heslo")
 #     if not session.get('logged_in'):
 #         return redirect(url_for('signin'))
 #     return render_template('index.html')
+@app.route('/')
+def index():
+    if not session.get('logged_in'):
+        return redirect(url_for('signin'))
+    # Předáme API klíč do šablony, aby ho šablona mohla použít (uživatel už je přihlášen)
+    return render_template('index.html', api_key=session.get('api_key'))
 
 # Přihlašovací stránka: podporuje GET (zobrazení formuláře) a POST (ověření API klíče).
-# 
 @app.route('/signin', methods=['GET', 'POST'])
 def signin():
     error = None
     if request.method == 'POST':
-        key = request.form.get("api_key")
-        # Ověření API klíče
+        key = request.form.get('api_key')
+        # Ověření API klíče: načteme z proměnných prostředí nebo z VALID_API_KEYS
         env_api_keys = os.getenv("VALID_API_KEYS")
-        valid_keys = set(env_api_keys.split(",")) if env_api_keys else VALID_API_KEYS
-        if key in valid_keys:
-            session["logged_in"] = True
-            session["api_key"] = key
-            return redirect(url_for("index"))
+        if env_api_keys:
+            valid_api_keys = set(env_api_keys.split(","))
+        else:
+            valid_api_keys = VALID_API_KEYS
+        if key in valid_api_keys:
+            session['logged_in'] = True
+            session['api_key'] = key
+            return redirect(url_for('index'))
         else:
             error = "Neplatný API klíč"
-    return render_template("signin.html", error=error)
-
-@app.route('/')
-def index():
-    if not session.get("logged_in"):
-        return redirect(url_for("signin"))
-    return render_template("index.html")
+    return render_template('signin.html', error=error)
 
 # ---------------------- Funkce pro získání aktuální ceny ----------------------
 
@@ -152,33 +154,21 @@ def get_current_xrp_price():
 
 # ---------------------- Predikční endpoint ----------------------
 @app.route('/predict', methods=['POST'])
-# def predict():
-#     try:
-#         data = request.get_json()
-#         if not data or "api_key" not in data:
-#             return jsonify({"error": "Missing API key"}), 400
 def predict():
     try:
-        # Pokud je API klíč uložen v session, použij jej; jinak vyžádej z JSON
-        if "api_key" in session:
-            key = session["api_key"]
-        else:
-            data = request.get_json()
-            if not data or "api_key" not in data:
-                return jsonify({"error": "Missing API key"}), 400
-            key = data["api_key"]
+        data = request.get_json()
+        if not data or "api_key" not in data:
+            return jsonify({"error": "Missing API key"}), 400
+
         # Ověření API klíče (případně i z session, pokud je uživatel přihlášen)
-        # env_api_keys = os.getenv("VALID_API_KEYS")
-        # if env_api_keys:
-        #     valid_api_keys = set(env_api_keys.split(","))
-        # else:
-        #     valid_api_keys = VALID_API_KEYS
-        # if data["api_key"] not in valid_api_keys:
-        #     return jsonify({"error": "Invalid API key"}), 401
         env_api_keys = os.getenv("VALID_API_KEYS")
-        valid_keys = set(env_api_keys.split(",")) if env_api_keys else VALID_API_KEYS
-        if key not in valid_keys:
+        if env_api_keys:
+            valid_api_keys = set(env_api_keys.split(","))
+        else:
+            valid_api_keys = VALID_API_KEYS
+        if data["api_key"] not in valid_api_keys:
             return jsonify({"error": "Invalid API key"}), 401
+
         # Výběr modelu dle parametru "model_type" ("short" nebo "long", výchozí je "short")
         model_type = data.get("model_type", "short").lower()
         if model_type not in ["short", "long"]:
@@ -263,4 +253,4 @@ def handle_exception(e):
 if __name__ == '__main__':
     test_price = get_current_xrp_price()
     logging.info(f"Test XRP price: {test_price}")
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080))) 
