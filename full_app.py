@@ -23,7 +23,7 @@ except Exception as e:
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Nastavíme velikost vstupního okna pro oba modely
+# Nastavení velikosti vstupního okna pro oba modely
 WINDOW_SIZE_SHORT = 5   # Pro krátkodobý model
 WINDOW_SIZE_LONG = 10   # Pro dlouhodobý model
 
@@ -94,13 +94,40 @@ from VALID_API_KEYS import VALID_API_KEYS
 app = Flask(__name__, static_folder='.')
 app.secret_key = os.environ.get("SECRET_KEY", "moje_tajne_heslo")
 
+# ---------------------- Přihlašovací funkce ----------------------
+
+# Hlavní stránka: pokud uživatel není přihlášen, přesměrujeme ho na přihlášení.
+# @app.route('/')
+# def index():
+#     if not session.get('logged_in'):
+#         return redirect(url_for('signin'))
+#     return render_template('index.html')
+
+# Přihlašovací stránka: podporuje GET (zobrazení formuláře) a POST (ověření API klíče).
+# 
+@app.route('/signin', methods=['GET', 'POST'])
+def signin():
+    error = None
+    if request.method == 'POST':
+        key = request.form.get("api_key")
+        # Ověření API klíče
+        env_api_keys = os.getenv("VALID_API_KEYS")
+        valid_keys = set(env_api_keys.split(",")) if env_api_keys else VALID_API_KEYS
+        if key in valid_keys:
+            session["logged_in"] = True
+            session["api_key"] = key
+            return redirect(url_for("index"))
+        else:
+            error = "Neplatný API klíč"
+    return render_template("signin.html", error=error)
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    if not session.get("logged_in"):
+        return redirect(url_for("signin"))
+    return render_template("index.html")
 
-@app.route('/signin')
-def signin():
-    return render_template('signin.html')
+# ---------------------- Funkce pro získání aktuální ceny ----------------------
 
 def get_current_xrp_price():
     try:
@@ -123,24 +150,36 @@ def get_current_xrp_price():
         logging.error(f"Error fetching XRP price: {e}")
         return None
 
+# ---------------------- Predikční endpoint ----------------------
 @app.route('/predict', methods=['POST'])
+# def predict():
+#     try:
+#         data = request.get_json()
+#         if not data or "api_key" not in data:
+#             return jsonify({"error": "Missing API key"}), 400
 def predict():
     try:
-        data = request.get_json()
-        if not data or "api_key" not in data:
-            return jsonify({"error": "Missing API key"}), 400
-
-        # Ověření API klíče
-        env_api_keys = os.getenv("VALID_API_KEYS")
-        if env_api_keys:
-            valid_api_keys = set(env_api_keys.split(","))
+        # Pokud je API klíč uložen v session, použij jej; jinak vyžádej z JSON
+        if "api_key" in session:
+            key = session["api_key"]
         else:
-            valid_api_keys = VALID_API_KEYS
-
-        if data["api_key"] not in valid_api_keys:
+            data = request.get_json()
+            if not data or "api_key" not in data:
+                return jsonify({"error": "Missing API key"}), 400
+            key = data["api_key"]
+        # Ověření API klíče (případně i z session, pokud je uživatel přihlášen)
+        # env_api_keys = os.getenv("VALID_API_KEYS")
+        # if env_api_keys:
+        #     valid_api_keys = set(env_api_keys.split(","))
+        # else:
+        #     valid_api_keys = VALID_API_KEYS
+        # if data["api_key"] not in valid_api_keys:
+        #     return jsonify({"error": "Invalid API key"}), 401
+        env_api_keys = os.getenv("VALID_API_KEYS")
+        valid_keys = set(env_api_keys.split(",")) if env_api_keys else VALID_API_KEYS
+        if key not in valid_keys:
             return jsonify({"error": "Invalid API key"}), 401
-
-        # Výběr modelu dle parametru model_type ("short" nebo "long", výchozí je "short")
+        # Výběr modelu dle parametru "model_type" ("short" nebo "long", výchozí je "short")
         model_type = data.get("model_type", "short").lower()
         if model_type not in ["short", "long"]:
             return jsonify({"error": "Invalid model_type. Must be 'short' or 'long'"}), 400
@@ -151,7 +190,7 @@ def predict():
 
         current_price = round(current_price, 5)
 
-        # Nastavení proměnných dle model_type
+        # Nastavení proměnných podle model_type
         if model_type == "short":
             window_size = WINDOW_SIZE_SHORT
             if scaler_X_short is None or scaler_y_short is None:
@@ -205,6 +244,7 @@ def predict():
         logging.error(f"Error in /predict: {e}\n{traceback.format_exc()}")
         return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
 
+# ---------------------- Další endpoints ----------------------
 @app.route('/list-tmp')
 def list_tmp():
     try:
