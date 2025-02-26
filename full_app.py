@@ -6,6 +6,7 @@ from tensorflow.keras.models import load_model
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 import numpy as np
 import requests
+import json
 from google.cloud import storage
 import tensorflow as tf
 import joblib  # Pro načtení scalerů
@@ -233,7 +234,16 @@ def predict():
     except Exception as e:
         logging.error(f"Error in /predict: {e}\n{traceback.format_exc()}")
         return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
-
+    
+@app.route('/latest_predictions')
+def latest_predictions():
+    try:
+        with open("latest_predictions.json", "r") as f:
+            predictions = json.load(f)
+        return jsonify(predictions)
+    except Exception as e:
+        logging.error(f"Error reading latest predictions: {e}")
+        return jsonify({"error": str(e)}), 500
 # ---------------------- Další endpoints ----------------------
 @app.route('/list-tmp')
 def list_tmp():
