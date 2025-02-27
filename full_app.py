@@ -11,10 +11,7 @@ import tensorflow as tf
 import joblib  # Pro načtení scalerů
 import json
 
-# Potlačíme nepodstatné logy TensorFlow
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
-
-# Použijeme pouze CPU
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 try:
     tf.config.set_visible_devices([], "GPU")
@@ -24,11 +21,11 @@ except Exception as e:
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Nastavení velikosti vstupního okna pro krátkodobý a dlouhodobý model
-WINDOW_SIZE_SHORT = 5    # Krátkodobý model
-WINDOW_SIZE_LONG = 10    # Dlouhodobý model
+# Velikost vstupních oken
+WINDOW_SIZE_SHORT = 5    # krátkodobý model
+WINDOW_SIZE_LONG = 10    # dlouhodobý model
 
-# Konfigurace Google Cloud Storage
+# Konfigurace bucketu
 BUCKET_NAME = "xrp-model-storage"
 
 def download_model(model_file, local_path):
@@ -41,17 +38,13 @@ def download_model(model_file, local_path):
             logging.error(f"Blob '{model_file}' does not exist in bucket '{BUCKET_NAME}'!")
         else:
             logging.info(f"Blob '{model_file}' found, size: {blob.size} bytes")
-        blob.download_to_filename(local_path)
-        logging.info(f"Model '{model_file}' downloaded to {local_path}")
-        if os.path.exists(local_path):
-            logging.info(f"File {local_path} downloaded successfully.")
-        else:
-            logging.error(f"File {local_path} not found after download!")
+            blob.download_to_filename(local_path)
+            logging.info(f"Model '{model_file}' downloaded to {local_path}")
     except Exception as e:
         logging.error(f"Error downloading model {model_file}: {e}")
         logging.error("download_model() failed, proceeding without model.")
 
-# Stáhni modelové soubory z GCS
+# Stáhni modelové soubory
 # Krátkodobý model
 download_model("xrp_model_short.h5", "xrp_model_short.h5")
 download_model("scaler_X_short.pkl", "scaler_X_short.pkl")
@@ -69,7 +62,7 @@ download_model("xrp_model_lstm.h5", "xrp_model_lstm.h5")
 download_model("scaler_X_lstm.pkl", "scaler_X_lstm.pkl")
 download_model("scaler_y_lstm.pkl", "scaler_y_lstm.pkl")
 
-# Načtení krátkodobého modelu a scalerů
+# Načti modely a scalery
 try:
     model_short = load_model("xrp_model_short.h5", compile=False)
     logging.info("Short-term model loaded successfully")
@@ -83,10 +76,8 @@ try:
     logging.info("Short-term scalers loaded successfully")
 except Exception as e:
     logging.error(f"Error loading short-term scalers: {e}")
-    scaler_X_short = None
-    scaler_y_short = None
+    scaler_X_short = scaler_y_short = None
 
-# Načtení dlouhodobého modelu a scalerů
 try:
     model_long = load_model("xrp_model_long.h5", compile=False)
     logging.info("Long-term model loaded successfully")
@@ -100,10 +91,8 @@ try:
     logging.info("Long-term scalers loaded successfully")
 except Exception as e:
     logging.error(f"Error loading long-term scalers: {e}")
-    scaler_X_long = None
-    scaler_y_long = None
+    scaler_X_long = scaler_y_long = None
 
-# Načtení ARIMA modelu a scalerů
 try:
     model_arima = joblib.load("xrp_model_arima.pkl")
     logging.info("ARIMA model loaded successfully")
@@ -117,10 +106,8 @@ try:
     logging.info("ARIMA scalers loaded successfully")
 except Exception as e:
     logging.error(f"Error loading ARIMA scalers: {e}")
-    scaler_X_arima = None
-    scaler_y_arima = None
+    scaler_X_arima = scaler_y_arima = None
 
-# Načtení LSTM modelu a scalerů
 try:
     model_lstm = load_model("xrp_model_lstm.h5", compile=False)
     logging.info("LSTM model loaded successfully")
@@ -134,16 +121,13 @@ try:
     logging.info("LSTM scalers loaded successfully")
 except Exception as e:
     logging.error(f"Error loading LSTM scalers: {e}")
-    scaler_X_lstm = None
-    scaler_y_lstm = None
+    scaler_X_lstm = scaler_y_lstm = None
 
-# Import API klíčů ze souboru VALID_API_KEYS.py
 from VALID_API_KEYS import VALID_API_KEYS
 
 app = Flask(__name__, static_folder='.')
 app.secret_key = os.environ.get("SECRET_KEY", "moje_tajne_heslo")
 
-# ---------------------- Přihlašovací funkce ----------------------
 @app.route('/')
 def index():
     if not session.get('logged_in'):
@@ -156,10 +140,7 @@ def signin():
     if request.method == 'POST':
         key = request.form.get('api_key')
         env_api_keys = os.getenv("VALID_API_KEYS")
-        if env_api_keys:
-            valid_api_keys = set(env_api_keys.split(","))
-        else:
-            valid_api_keys = VALID_API_KEYS
+        valid_api_keys = set(env_api_keys.split(",")) if env_api_keys else VALID_API_KEYS
         if key in valid_api_keys:
             session['logged_in'] = True
             session['api_key'] = key
@@ -168,7 +149,6 @@ def signin():
             error = "Neplatný API klíč"
     return render_template('signin.html', error=error)
 
-# ---------------------- Funkce pro získání aktuální ceny ----------------------
 def get_current_xrp_price():
     try:
         url = "https://api.coingecko.com/api/v3/simple/price?ids=ripple&vs_currencies=usd"
@@ -190,14 +170,7 @@ def get_current_xrp_price():
         logging.error(f"Error fetching XRP price: {e}")
         return None
 
-# ---------------------- Ensemble Prediction Function ----------------------
 def ensemble_prediction(preds, weights):
-    """
-    preds: dictionary s předpověďmi jednotlivých modelů, např.
-           { "short": 2.67, "long": 2.71, "arima": 2.65, "lstm": 2.69 }
-    weights: dictionary s vahami, např.
-           { "short": 0.25, "long": 0.25, "arima": 0.25, "lstm": 0.25 }
-    """
     total = 0
     total_weight = 0
     for key, pred in preds.items():
@@ -207,37 +180,31 @@ def ensemble_prediction(preds, weights):
             total_weight += w
     return total / total_weight if total_weight > 0 else None
 
-# ---------------------- Predikční endpoint ----------------------
 @app.route('/predict', methods=['POST'])
-def predict():
+def predict_endpoint():
     try:
         data = request.get_json()
         if not data or "api_key" not in data:
             return jsonify({"error": "Missing API key"}), 400
 
         env_api_keys = os.getenv("VALID_API_KEYS")
-        if env_api_keys:
-            valid_api_keys = set(env_api_keys.split(","))
-        else:
-            valid_api_keys = VALID_API_KEYS
+        valid_api_keys = set(env_api_keys.split(",")) if env_api_keys else VALID_API_KEYS
         if data["api_key"] not in valid_api_keys:
             return jsonify({"error": "Invalid API key"}), 401
 
-        # Výběr modelu dle parametru "model_type" – zde použijeme ensemble všech modelů
         current_price = get_current_xrp_price()
         if current_price is None:
             return jsonify({"error": "Failed to fetch XRP price"}), 500
         current_price = round(current_price, 5)
 
-        # Vytvoříme vstupní data pro každý model: opakujeme aktuální cenu "window_size" krát
+        # Příprava vstupních dat pro jednotlivé modely
         X_input_short = np.array([[current_price] * WINDOW_SIZE_SHORT])
         X_input_long = np.array([[current_price] * WINDOW_SIZE_LONG])
-        X_input_arima = X_input_short.copy()  # Pro ARIMA můžeme použít stejné okno jako pro short
-        X_input_lstm = X_input_long.copy()    # Pro LSTM použijeme okno jako long
+        X_input_arima = np.array([[current_price]])  # Tvar (1, 1)
+        X_input_lstm = X_input_long.copy()
 
         preds = {}
 
-        # Krátkodobý model
         if model_short and scaler_X_short and scaler_y_short:
             X_scaled_short = scaler_X_short.transform(X_input_short)
             pred_short = model_short.predict(X_scaled_short)
@@ -246,7 +213,6 @@ def predict():
         else:
             preds["short"] = None
 
-        # Dlouhodobý model
         if model_long and scaler_X_long and scaler_y_long:
             X_scaled_long = scaler_X_long.transform(X_input_long)
             pred_long = model_long.predict(X_scaled_long)
@@ -255,16 +221,16 @@ def predict():
         else:
             preds["long"] = None
 
-        # ARIMA model
         if model_arima and scaler_X_arima and scaler_y_arima:
-            X_scaled_arima = scaler_X_arima.transform(X_input_arima)
-            pred_arima = model_arima.predict(X_scaled_arima)
-            pred_arima = scaler_y_arima.inverse_transform(pred_arima)
+    # Místo transformace vstupu zavoláme forecast přímo (ARIMA model totiž nevyužívá vstupní data jako taková)
+            pred_arima_scaled = model_arima.forecast(steps=1)
+    # forecast vrátí 1D pole; přetvoříme jej na 2D, aby šlo použít inverzní transformaci
+            pred_arima_scaled = np.array(pred_arima_scaled).reshape(-1, 1)
+            pred_arima = scaler_y_arima.inverse_transform(pred_arima_scaled)
             preds["arima"] = round(float(pred_arima[0][0]), 5)
         else:
             preds["arima"] = None
 
-        # LSTM model
         if model_lstm and scaler_X_lstm and scaler_y_lstm:
             X_scaled_lstm = scaler_X_lstm.transform(X_input_lstm)
             pred_lstm = model_lstm.predict(X_scaled_lstm)
@@ -273,7 +239,7 @@ def predict():
         else:
             preds["lstm"] = None
 
-        # Pro jednoduchost nastavíme váhy – ty lze upravit podle validace
+        # Nastavíme váhy pro ensemble – upravitelné podle validace
         weights = {"short": 0.25, "long": 0.25, "arima": 0.25, "lstm": 0.25}
         ensemble_pred = ensemble_prediction(preds, weights)
         if ensemble_pred is None:
@@ -282,7 +248,7 @@ def predict():
         return jsonify({
             "current_price": current_price,
             "predicted_price": ensemble_pred,
-            "predictions": preds
+            "predictions": preds,
             "model_type": "ensemble"
         })
 
